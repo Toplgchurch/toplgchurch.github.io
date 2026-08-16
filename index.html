@@ -256,6 +256,21 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
     <div id="eventsList"><p style="font-size:.85rem;color:#8a7f95;font-weight:600">No upcoming events right now — check back soon!</p></div>
   </section>
 
+  <!-- BIBLE STUDY RECAP -->
+  <section id="studyWrap" class="hidden">
+    <div class="section-label">Bible Study Recap</div>
+    <div class="card">
+      <div class="post-tag" id="bsDateTag" style="margin:0 0 8px"></div>
+      <h3 class="serif" style="font-size:1.15rem;color:var(--purple-deep)" id="bsTitleOut"></h3>
+      <div style="margin:8px 0 10px"><span class="code-chip" style="font-size:.88rem;letter-spacing:.02em" id="bsScriptureOut"></span></div>
+      <p style="font-size:.9rem;line-height:1.6;color:#43384f;white-space:pre-wrap" id="bsSummaryOut"></p>
+      <div id="bsQuestionsWrap" class="hidden">
+        <div class="section-label" style="margin-top:14px">Reflect &amp; Grow</div>
+        <ol id="bsQuestionsOut" style="padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:.9rem;line-height:1.55;color:#43384f;font-weight:600"></ol>
+      </div>
+    </div>
+  </section>
+
   <!-- DAILY VERSE -->
   <section>
     <div class="section-label">Daily Word</div>
@@ -375,6 +390,7 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
         <button class="on" data-tab="tabPosts" onclick="showTab(this)">Feed</button>
         <button data-tab="tabTestis" onclick="showTab(this)">Testimonies</button>
         <button data-tab="tabTrivia" onclick="showTab(this)">Trivia</button>
+        <button data-tab="tabStudy" onclick="showTab(this)">Bible Study</button>
         <button data-tab="tabEvents" onclick="showTab(this)">Events</button>
         <button data-tab="tabReqs" onclick="showTab(this)">Requests</button>
       </div>
@@ -424,6 +440,25 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
           <button class="submit-btn" onclick="saveTrivia()">Publish New Question</button>
           <div class="form-msg" id="qMsg" aria-live="polite"></div>
         </div>
+      </div>
+
+      <!-- BIBLE STUDY TAB -->
+      <div id="tabStudy" class="hidden">
+        <div class="card" style="margin-bottom:14px">
+          <label for="bsDate">Study date</label>
+          <input id="bsDate" type="date">
+          <label for="bsTitle">Title</label>
+          <input id="bsTitle" maxlength="150" placeholder="The Believing Centurion">
+          <label for="bsScripture">Scripture</label>
+          <input id="bsScripture" maxlength="100" placeholder="Matthew 8:5-13">
+          <label for="bsSummary">Summary / lesson</label>
+          <textarea id="bsSummary" rows="5" maxlength="4000" placeholder="This scripture is about..."></textarea>
+          <label for="bsQuestions">Reflection questions (one per line)</label>
+          <textarea id="bsQuestions" rows="4" maxlength="2000" placeholder="What did the centurion do to show respect, humility and faith in Jesus?&#10;How do you show your faith in the Word of God?"></textarea>
+          <button class="submit-btn" onclick="addStudy()">Publish Recap</button>
+          <div class="form-msg" id="bsMsg" aria-live="polite"></div>
+        </div>
+        <div id="adminStudies"></div>
       </div>
 
       <!-- EVENTS TAB -->
@@ -722,6 +757,30 @@ async function loadEvents(){
     </div>`).join("");
 }
 
+/* ============ PUBLIC: BIBLE STUDY RECAP ============ */
+function fmtStudyDate(d){
+  return new Date(d + "T12:00:00").toLocaleDateString('en-US',{month:'numeric', day:'numeric'});
+}
+async function loadStudy(){
+  if (!CONFIGURED) return;
+  const {data} = await sb.from("bible_studies").select("*")
+    .order("study_date",{ascending:false}).limit(1);
+  if (!data || !data.length) return;
+  const s = data[0];
+  $("bsDateTag").textContent = "Bible Study \u00b7 " + fmtStudyDate(s.study_date);
+  $("bsTitleOut").textContent = s.title;
+  $("bsScriptureOut").textContent = s.scripture;
+  $("bsSummaryOut").textContent = s.summary;
+  const qs = (s.questions||"").split("\n").map(q=>q.trim()).filter(Boolean);
+  if (qs.length){
+    $("bsQuestionsOut").innerHTML = qs.map(q=>"<li>"+esc(q)+"</li>").join("");
+    $("bsQuestionsWrap").classList.remove("hidden");
+  } else {
+    $("bsQuestionsWrap").classList.add("hidden");
+  }
+  $("studyWrap").classList.remove("hidden");
+}
+
 /* =====================================================
    ADMIN
 ===================================================== */
@@ -750,12 +809,12 @@ async function adminLogin(){
 }
 function enterDash(){
   $("loginBox").classList.add("hidden"); $("dashBox").classList.remove("hidden");
-  loadAdminPosts(); loadAdminTestis(); loadAdminTriviaForm(); loadRequests(); loadAdminEvents();
+  loadAdminPosts(); loadAdminTestis(); loadAdminTriviaForm(); loadRequests(); loadAdminEvents(); loadAdminStudies();
 }
 function showTab(btn){
   document.querySelectorAll(".admin-tabs button").forEach(b=>b.classList.remove("on"));
   btn.classList.add("on");
-  ["tabPosts","tabTestis","tabTrivia","tabEvents","tabReqs"].forEach(id=>$(id).classList.add("hidden"));
+  ["tabPosts","tabTestis","tabTrivia","tabStudy","tabEvents","tabReqs"].forEach(id=>$(id).classList.add("hidden"));
   $(btn.dataset.tab).classList.remove("hidden");
 }
 
@@ -856,6 +915,42 @@ async function saveTrivia(){
   if (!error) loadTrivia();
 }
 
+/* admin: bible study */
+async function addStudy(){
+  const study_date = $("bsDate").value;
+  const title = $("bsTitle").value.trim();
+  const scripture = $("bsScripture").value.trim();
+  const summary = $("bsSummary").value.trim();
+  const msg = $("bsMsg");
+  if (!study_date || !title || !scripture || !summary){
+    msg.className="form-msg bad"; msg.textContent="Date, title, scripture, and summary are all required."; return;
+  }
+  const {error} = await sb.from("bible_studies").insert({
+    study_date, title, scripture, summary,
+    questions: $("bsQuestions").value.trim() || null
+  });
+  msg.className = "form-msg " + (error?"bad":"ok");
+  msg.textContent = error ? ("Error: " + error.message) : "Recap published!";
+  if (!error){
+    ["bsDate","bsTitle","bsScripture","bsSummary","bsQuestions"].forEach(id=>$(id).value="");
+    loadAdminStudies(); loadStudy();
+  }
+}
+async function loadAdminStudies(){
+  const {data} = await sb.from("bible_studies").select("*").order("study_date",{ascending:false}).limit(30);
+  $("adminStudies").innerHTML = (data||[]).map(s=>`
+    <div class="admin-item">
+      <div class="meta">${fmtStudyDate(s.study_date)} \u00b7 ${esc(s.scripture)}</div>
+      <p><b>${esc(s.title)}</b></p>
+      <div class="admin-actions"><button class="a-bad" onclick="delStudy('${s.id}')">Delete</button></div>
+    </div>`).join("") || "<p style='font-size:.85rem;color:#8a7f95'>No recaps yet.</p>";
+}
+async function delStudy(id){
+  if (!confirm("Delete this recap?")) return;
+  await sb.from("bible_studies").delete().eq("id",id);
+  loadAdminStudies(); loadStudy();
+}
+
 /* admin: events */
 async function addEvent(){
   const title = $("evTitle").value.trim();
@@ -912,7 +1007,7 @@ document.querySelectorAll("nav a").forEach(a=>{
     a.classList.add("active"); closeAdmin();
   });
 });
-loadVerse(); loadFeed(); loadTrivia(); loadFeatured(); loadEvents();
+loadVerse(); loadFeed(); loadTrivia(); loadFeatured(); loadEvents(); loadStudy();
 </script>
 </body>
 </html>
