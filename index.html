@@ -251,6 +251,9 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
       <a class="mini-btn" href="https://zoom.us/j/6485796489" target="_blank" rel="noopener">Join on Zoom</a>
       <a class="mini-btn gold" href="tel:6465588656">Dial In</a>
     </div>
+
+    <div class="section-label" style="margin-top:18px">Upcoming Events</div>
+    <div id="eventsList"><p style="font-size:.85rem;color:#8a7f95;font-weight:600">No upcoming events right now — check back soon!</p></div>
   </section>
 
   <!-- DAILY VERSE -->
@@ -372,6 +375,7 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
         <button class="on" data-tab="tabPosts" onclick="showTab(this)">Feed</button>
         <button data-tab="tabTestis" onclick="showTab(this)">Testimonies</button>
         <button data-tab="tabTrivia" onclick="showTab(this)">Trivia</button>
+        <button data-tab="tabEvents" onclick="showTab(this)">Events</button>
         <button data-tab="tabReqs" onclick="showTab(this)">Requests</button>
       </div>
 
@@ -422,8 +426,25 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
         </div>
       </div>
 
+      <!-- EVENTS TAB -->
+      <div id="tabEvents" class="hidden">
+        <div class="card" style="margin-bottom:14px">
+          <label for="evTitle">Event title</label>
+          <input id="evTitle" maxlength="120" placeholder="Fall Revival Night">
+          <label for="evWhen">Date &amp; time</label>
+          <input id="evWhen" type="datetime-local">
+          <label for="evWhere">Location (optional)</label>
+          <input id="evWhere" maxlength="150" placeholder="Tabernacle of Praise, Locust Grove">
+          <label for="evDetails">Details (optional)</label>
+          <textarea id="evDetails" rows="2" maxlength="800"></textarea>
+          <button class="submit-btn" onclick="addEvent()">Add Event</button>
+          <div class="form-msg" id="evMsg" aria-live="polite"></div>
+        </div>
+        <div id="adminEvents"></div>
+      </div>
+
       <!-- REQUESTS TAB -->
-      <div id="tabReqs">
+      <div id="tabReqs" class="hidden">
         <div id="reqList"></div>
       </div>
     </div>
@@ -678,6 +699,29 @@ async function submitRequest(){
   }
 }
 
+/* ============ PUBLIC: EVENTS ============ */
+function fmtEvent(ts){
+  const d = new Date(ts);
+  const date = d.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
+  const time = d.toLocaleTimeString('en-US',{hour:'numeric', minute:'2-digit'});
+  return date + " \u00b7 " + time;
+}
+async function loadEvents(){
+  if (!CONFIGURED) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const {data} = await sb.from("events").select("*")
+    .gte("starts_at", today.toISOString())
+    .order("starts_at",{ascending:true}).limit(10);
+  if (!data || !data.length) return;
+  $("eventsList").innerHTML = data.map(e=>`
+    <div class="sched-card" style="border-left-color:var(--gold-lo)">
+      <div class="day">${fmtEvent(e.starts_at)}</div>
+      <div class="what serif">${esc(e.title)}</div>
+      ${e.location ? '<div class="detail"><b>Where:</b> ' + esc(e.location) + '</div>' : ''}
+      ${e.details ? '<div class="detail">' + esc(e.details) + '</div>' : ''}
+    </div>`).join("");
+}
+
 /* =====================================================
    ADMIN
 ===================================================== */
@@ -706,12 +750,12 @@ async function adminLogin(){
 }
 function enterDash(){
   $("loginBox").classList.add("hidden"); $("dashBox").classList.remove("hidden");
-  loadAdminPosts(); loadAdminTestis(); loadAdminTriviaForm(); loadRequests();
+  loadAdminPosts(); loadAdminTestis(); loadAdminTriviaForm(); loadRequests(); loadAdminEvents();
 }
 function showTab(btn){
   document.querySelectorAll(".admin-tabs button").forEach(b=>b.classList.remove("on"));
   btn.classList.add("on");
-  ["tabPosts","tabTestis","tabTrivia","tabReqs"].forEach(id=>$(id).classList.add("hidden"));
+  ["tabPosts","tabTestis","tabTrivia","tabEvents","tabReqs"].forEach(id=>$(id).classList.add("hidden"));
   $(btn.dataset.tab).classList.remove("hidden");
 }
 
@@ -812,6 +856,39 @@ async function saveTrivia(){
   if (!error) loadTrivia();
 }
 
+/* admin: events */
+async function addEvent(){
+  const title = $("evTitle").value.trim();
+  const when = $("evWhen").value;
+  const msg = $("evMsg");
+  if (!title || !when) { msg.className="form-msg bad"; msg.textContent="Title and date/time are required."; return; }
+  const {error} = await sb.from("events").insert({
+    title, starts_at: new Date(when).toISOString(),
+    location: $("evWhere").value.trim() || null,
+    details: $("evDetails").value.trim() || null
+  });
+  msg.className = "form-msg " + (error?"bad":"ok");
+  msg.textContent = error ? ("Error: " + error.message) : "Event added!";
+  if (!error){
+    $("evTitle").value=""; $("evWhen").value=""; $("evWhere").value=""; $("evDetails").value="";
+    loadAdminEvents(); loadEvents();
+  }
+}
+async function loadAdminEvents(){
+  const {data} = await sb.from("events").select("*").order("starts_at",{ascending:true}).limit(50);
+  $("adminEvents").innerHTML = (data||[]).map(e=>`
+    <div class="admin-item">
+      <div class="meta">${fmtEvent(e.starts_at)}${e.location ? " \u00b7 " + esc(e.location) : ""}</div>
+      <p><b>${esc(e.title)}</b>${e.details ? "\n" + esc(e.details) : ""}</p>
+      <div class="admin-actions"><button class="a-bad" onclick="delEvent('${e.id}')">Delete</button></div>
+    </div>`).join("") || "<p style='font-size:.85rem;color:#8a7f95'>No events yet.</p>";
+}
+async function delEvent(id){
+  if (!confirm("Delete this event?")) return;
+  await sb.from("events").delete().eq("id",id);
+  loadAdminEvents(); loadEvents();
+}
+
 /* admin: requests */
 async function loadRequests(){
   const {data} = await sb.from("requests").select("*").order("created_at",{ascending:false}).limit(100);
@@ -835,7 +912,7 @@ document.querySelectorAll("nav a").forEach(a=>{
     a.classList.add("active"); closeAdmin();
   });
 });
-loadVerse(); loadFeed(); loadTrivia(); loadFeatured();
+loadVerse(); loadFeed(); loadTrivia(); loadFeatured(); loadEvents();
 </script>
 </body>
 </html>
