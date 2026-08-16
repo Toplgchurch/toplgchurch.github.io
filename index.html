@@ -455,7 +455,8 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
           <textarea id="bsSummary" rows="5" maxlength="4000" placeholder="This scripture is about..."></textarea>
           <label for="bsQuestions">Reflection questions (one per line)</label>
           <textarea id="bsQuestions" rows="4" maxlength="2000" placeholder="What did the centurion do to show respect, humility and faith in Jesus?&#10;How do you show your faith in the Word of God?"></textarea>
-          <button class="submit-btn" onclick="addStudy()">Publish Recap</button>
+          <button class="submit-btn" id="bsSaveBtn" onclick="addStudy()">Publish Recap</button>
+          <button class="submit-btn hidden" id="bsCancelBtn" style="background:#EFE9F8;color:#4B2A85;margin-top:8px" onclick="cancelStudyEdit()">Cancel Editing</button>
           <div class="form-msg" id="bsMsg" aria-live="polite"></div>
         </div>
         <div id="adminStudies"></div>
@@ -916,6 +917,28 @@ async function saveTrivia(){
 }
 
 /* admin: bible study */
+let STUDY_EDIT_ID = null;
+async function editStudy(id){
+  const {data} = await sb.from("bible_studies").select("*").eq("id", id).single();
+  if (!data) return;
+  STUDY_EDIT_ID = id;
+  $("bsDate").value = data.study_date;
+  $("bsTitle").value = data.title;
+  $("bsScripture").value = data.scripture;
+  $("bsSummary").value = data.summary;
+  $("bsQuestions").value = data.questions || "";
+  $("bsSaveBtn").textContent = "Save Changes";
+  $("bsCancelBtn").classList.remove("hidden");
+  $("bsMsg").className = "form-msg"; $("bsMsg").textContent = "Editing \u201c" + data.title + "\u201d";
+  $("tabStudy").scrollIntoView({behavior:"smooth", block:"start"});
+}
+function cancelStudyEdit(){
+  STUDY_EDIT_ID = null;
+  ["bsDate","bsTitle","bsScripture","bsSummary","bsQuestions"].forEach(id=>$(id).value="");
+  $("bsSaveBtn").textContent = "Publish Recap";
+  $("bsCancelBtn").classList.add("hidden");
+  $("bsMsg").textContent = "";
+}
 async function addStudy(){
   const study_date = $("bsDate").value;
   const title = $("bsTitle").value.trim();
@@ -925,13 +948,20 @@ async function addStudy(){
   if (!study_date || !title || !scripture || !summary){
     msg.className="form-msg bad"; msg.textContent="Date, title, scripture, and summary are all required."; return;
   }
-  const {error} = await sb.from("bible_studies").insert({
-    study_date, title, scripture, summary,
-    questions: $("bsQuestions").value.trim() || null
-  });
+  const row = { study_date, title, scripture, summary,
+    questions: $("bsQuestions").value.trim() || null };
+  let error;
+  if (STUDY_EDIT_ID) {
+    ({error} = await sb.from("bible_studies").update(row).eq("id", STUDY_EDIT_ID));
+  } else {
+    ({error} = await sb.from("bible_studies").insert(row));
+  }
   msg.className = "form-msg " + (error?"bad":"ok");
-  msg.textContent = error ? ("Error: " + error.message) : "Recap published!";
+  msg.textContent = error ? ("Error: " + error.message) : (STUDY_EDIT_ID ? "Changes saved!" : "Recap published!");
   if (!error){
+    STUDY_EDIT_ID = null;
+    $("bsSaveBtn").textContent = "Publish Recap";
+    $("bsCancelBtn").classList.add("hidden");
     ["bsDate","bsTitle","bsScripture","bsSummary","bsQuestions"].forEach(id=>$(id).value="");
     loadAdminStudies(); loadStudy();
   }
@@ -942,7 +972,10 @@ async function loadAdminStudies(){
     <div class="admin-item">
       <div class="meta">${fmtStudyDate(s.study_date)} \u00b7 ${esc(s.scripture)}</div>
       <p><b>${esc(s.title)}</b></p>
-      <div class="admin-actions"><button class="a-bad" onclick="delStudy('${s.id}')">Delete</button></div>
+      <div class="admin-actions">
+        <button class="a-gold" onclick="editStudy('${s.id}')">Edit</button>
+        <button class="a-bad" onclick="delStudy('${s.id}')">Delete</button>
+      </div>
     </div>`).join("") || "<p style='font-size:.85rem;color:#8a7f95'>No recaps yet.</p>";
 }
 async function delStudy(id){
