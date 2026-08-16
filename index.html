@@ -204,7 +204,7 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
     <div class="section-label">Watch</div>
     <div class="watch">
       <div class="video-frame">
-        <a class="play-btn" href="https://www.facebook.com/profile.php?id=100064661093117" target="_blank" rel="noopener" aria-label="Watch on Facebook Live">
+        <a class="play-btn" href="https://www.facebook.com/TabernacleOfPraiseLocustGrove19/live_videos" target="_blank" rel="noopener" aria-label="Watch live and past services on Facebook">
           <svg width="22" height="24" viewBox="0 0 22 24"><path d="M0 0 L22 12 L0 24 Z" fill="#3A1F6B"/></svg>
         </a>
         <span>Sunday Worship &middot; Live on Facebook</span>
@@ -212,7 +212,7 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
       <div class="watch-info">
         <h3>Join us in person or online</h3>
         <p>Worship with us live every Sunday at 10:30 AM. Can't make it to Locust Grove? Watch from anywhere on Facebook Live.</p>
-        <a class="gold-btn" href="https://www.facebook.com/profile.php?id=100064661093117" target="_blank" rel="noopener">Watch on Facebook</a>
+        <a class="gold-btn" href="https://www.facebook.com/share/1EHsMsPoLA/" target="_blank" rel="noopener">Watch on Facebook</a>
       </div>
     </div>
   </section>
@@ -444,8 +444,8 @@ nav a:focus-visible,.opt:focus-visible,button:focus-visible,a:focus-visible{
    SETUP — paste your Supabase project values here
    (Supabase Dashboard > Settings > API)
 ===================================================== */
-const SB_URL  = "PASTE_YOUR_SUPABASE_URL";
-const SB_ANON = "PASTE_YOUR_SUPABASE_ANON_KEY";
+const SB_URL  = "https://wbkwyjbfsuagvmocbczj.supabase.co";
+const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6India3d5amJmc3VhZ3Ztb2NiY3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MDExNDQsImV4cCI6MjEwMjQ3NzE0NH0.lW3DRSd2JU70IXrd7n9KKrMKvz-AMGhZE0I0mqxy6zQ";
 
 const CONFIGURED = !SB_URL.includes("PASTE_");
 const sb = CONFIGURED ? supabase.createClient(SB_URL, SB_ANON) : null;
